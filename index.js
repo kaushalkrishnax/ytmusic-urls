@@ -1,36 +1,26 @@
 import { Hono } from "hono";
-import ytdl from "@distube/ytdl-core";
+import ytdl from "@ybd-project/ytdl-core";
 
 const app = new Hono();
 
-app.get("/urls", async (c) => {
-  const videoId = c.req.query("videoId");
-  if (!videoId || !ytdl.validateID(videoId)) {
-    return c.json({ error: "Missing or invalid videoId" }, 400);
-  }
+app.get("/url", async (c) => {
+  const id = c.req.query("id");
+  if (!id) return c.json({ error: "Missing id" }, 400);
 
   try {
-    const info = await ytdl.getInfo(`https://www.youtube.com/watch?v=${videoId}`);
-    const formats = info.formats;
+    const info = await ytdl.getInfo(`https://www.youtube.com/watch?v=${id}`);
+    const formats = ytdl.filterFormats(info.formats, "audioonly");
 
-    const audio = formats
-      .filter((f) => f.mimeType?.includes("audio") && !f.mimeType?.includes("video"))
-      .map((f) => ({
-        url: f.url,
-        quality: `${f.audioBitrate || Math.round(f.bitrate / 1000)}kbps`,
-      }));
-
-    const video = formats
-      .filter((f) => f.mimeType?.includes("video") && f.qualityLabel)
-      .map((f) => ({
-        url: f.url,
-        quality: f.qualityLabel,
-      }));
-
-    return c.json({ urls: { audio, video }});
+    return c.json({
+      title: info.videoDetails.title,
+      urls: formats.map(f => ({
+        quality: f.audioQuality,
+        mimeType: f.mimeType,
+        url: f.url
+      }))
+    });
   } catch (err) {
-    console.error(err);
-    return c.json({ error: "Failed to fetch video info" }, 500);
+    return c.json({ error: err.message }, 500);
   }
 });
 
